@@ -103,6 +103,68 @@ def fetch(cfg_update=None, cfg_filename=None):
     
     return domains_unified
 
+def fetch_with_sources(cfg_update=None, cfg_filename=None):
+    """fetch sources with associated URLs"""
+    # load config
+    try:
+        conf = pkgutil.get_data(__package__, 'blocklist.conf')
+        cfg =  yaml.safe_load(conf) 
+    except Exception as e:
+        logging.error("invalid default config: %s" % e)
+        sys.exit(1)
+    
+    if cfg_filename is not None:
+        try:
+            with open(cfg_filename, 'r') as stream:
+                cfg =  yaml.safe_load(stream)
+        except Exception as e:
+            logging.error("invalid external cfg file: %s" % e)
+            sys.exit(1)
+
+    # overwrite config with external config ?    
+    if cfg_update is not None:
+        try:
+            cfg.update( yaml.safe_load(cfg_update) )
+        except Exception as e:
+            logging.error("invalid update config: %s" % e)
+            sys.exit(1)
+    
+    # init logger
+    level = logging.INFO
+    if cfg["verbose"]: level = logging.DEBUG
+    logging.basicConfig(format='%(asctime)s %(message)s', 
+                        stream=sys.stdout, level=level)
+
+    domain_to_source = {}
+
+    # feching all sources
+    for s in cfg.get("sources", []):
+        pattern = s["pattern"]
+        for u in s["urls"]:
+            try:
+                r = requests.get(u, timeout=float(cfg["timeout"]), verify=cfg["tlsverify"])
+                if r.status_code != 200:
+                    logging.error(f"HTTP error {r.status_code} for {u}")
+                    continue
+                domains = inspect_source(pattern, r.text)
+                for d in domains:
+                    domain_to_source[d] = u
+            except Exception as e:
+                logging.error(f"Request failed for {u}: {e}")
+    
+    # add blacklist domains
+    blacklist = set(cfg.get("blacklist", []))
+    for b in blacklist:
+        if b not in domain_to_source:
+            domain_to_source[b] = "local:blacklist"
+    
+    # apply whitelist
+    whitelist = set(cfg.get("whitelist", []))
+    for w in whitelist:
+        domain_to_source.pop(w, None)
+    
+    return domain_to_source
+
 def save_to_file(filename, data):
     """save to file"""
     try:
@@ -155,12 +217,12 @@ def save_hosts(filename, ip="0.0.0.0", cfg_update=None, cfg_filename=None):
     if success:
         logging.debug("hosts file saved")
 
-def save_map(filename, default_value="", cfg_update=None, cfg_filename=None):
+def save_map(filename, cfg_update=None, cfg_filename=None):
     """
-    Save to file with TinyCDB map format.
+    Save to file with TinyCDB map format: <domain><tab><source-url>
     """
-    #fetching domains
-    domains = fetch(cfg_update=cfg_update, cfg_filename=cfg_filename)
+    # fetching domains w/ sources
+    domains = fetch_with_sources(cfg_update=cfg_update, cfg_filename=cfg_filename)
 
     # to avoid empty file
     if len(domains) == 0:
@@ -171,8 +233,8 @@ def save_map(filename, default_value="", cfg_update=None, cfg_filename=None):
     map.append( "Updated: %s" % date.today() )
     map.append( "" )
 
-    for d in domains:
-        map.append(f"{d}\t1")
+    for domain, source in domains.items():
+        map.append(f"{domain}\t{source}")
     
     success = save_to_file(filename, "\n".join(map))
     if success:
