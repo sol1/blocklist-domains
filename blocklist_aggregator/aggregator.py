@@ -155,6 +155,29 @@ def save_hosts(filename, ip="0.0.0.0", cfg_update=None, cfg_filename=None):
     if success:
         logging.debug("hosts file saved")
 
+def save_map(filename, default_value="", cfg_update=None, cfg_filename=None):
+    """
+    Save to file with TinyCDB map format.
+    """
+    #fetching domains
+    domains = fetch(cfg_update=cfg_update, cfg_filename=cfg_filename)
+
+    # to avoid empty file
+    if len(domains) == 0:
+        logging.error("nothing to write, the domain list is empty!")
+        return
+
+    map = [ "Generated with blocklist-aggregator" ]
+    map.append( "Updated: %s" % date.today() )
+    map.append( "" )
+
+    for d in domains:
+        map.append(f"{d}\t1")
+    
+    success = save_to_file(filename, "\n".join(map))
+    if success:
+        logging.debug("map file saved")
+
 def save_cdb(filename, default_value="", cfg_update=None, cfg_filename=None):
     """save to CDB database"""
     # feching domains
