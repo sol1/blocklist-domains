@@ -16,7 +16,23 @@ def percent_list(part_list, whole_list):
         return (w,0)
     p = 100 * float(len(part_list))/float(w)
     return (w,round(100-p, 2))
-    
+
+def load_config(cfg_update=None, cfg_filename=None):
+    """load YAML config"""
+    try:
+        if cfg_filename:
+            with open(cfg_filename, 'r') as stream:
+                cfg = yaml.safe_load(stream)
+        else:
+            conf = pkgutil.get_data(__package__, 'blocklist.conf')
+            cfg = yaml.safe_load(conf)
+        if cfg_update is not None:
+            cfg.update(yaml.safe_load(cfg_update))
+        return cfg
+    except Exception as e:
+        logging.error("Error loading config: %s" % e)
+        sys.exit(1)
+        
 def inspect_source(pattern, string):
     """inspect string to find domains"""
     logging.debug("*** Searching valid domains...")
@@ -36,28 +52,7 @@ def inspect_source(pattern, string):
 def fetch(cfg_update=None, cfg_filename=None):
     """fetch sources"""
     # read default config or from file
-    try:
-        conf = pkgutil.get_data(__package__, 'blocklist.conf')
-        cfg =  yaml.safe_load(conf) 
-    except Exception as e:
-        logging.error("invalid default config: %s" % e)
-        sys.exit(1)
-
-    if cfg_filename is not None:
-        try:
-            with open(cfg_filename, 'r') as stream:
-                cfg =  yaml.safe_load(stream)
-        except Exception as e:
-            logging.error("invalid external cfg file: %s" % e)
-            sys.exit(1)
-
-    # overwrite config with external config ?    
-    if cfg_update is not None:
-        try:
-            cfg.update( yaml.safe_load(cfg_update) )
-        except Exception as e:
-            logging.error("invalid update config: %s" % e)
-            sys.exit(1)
+    cfg = load_config(cfg_update, cfg_filename)
 
     # init logger
     level = logging.INFO
@@ -106,28 +101,7 @@ def fetch(cfg_update=None, cfg_filename=None):
 def fetch_with_sources(cfg_update=None, cfg_filename=None):
     """fetch sources with associated URLs"""
     # load config
-    try:
-        conf = pkgutil.get_data(__package__, 'blocklist.conf')
-        cfg =  yaml.safe_load(conf) 
-    except Exception as e:
-        logging.error("invalid default config: %s" % e)
-        sys.exit(1)
-    
-    if cfg_filename is not None:
-        try:
-            with open(cfg_filename, 'r') as stream:
-                cfg =  yaml.safe_load(stream)
-        except Exception as e:
-            logging.error("invalid external cfg file: %s" % e)
-            sys.exit(1)
-
-    # overwrite config with external config ?    
-    if cfg_update is not None:
-        try:
-            cfg.update( yaml.safe_load(cfg_update) )
-        except Exception as e:
-            logging.error("invalid update config: %s" % e)
-            sys.exit(1)
+    cfg = load_config(cfg_update, cfg_filename)
     
     # init logger
     level = logging.INFO
@@ -229,12 +203,12 @@ def save_map(filename, cfg_update=None, cfg_filename=None):
         logging.error("nothing to write, the domain list is empty!")
         return
 
-    map = [ "Generated with blocklist-aggregator" ]
-    map.append( "Updated: %s" % date.today() )
+    map = [ "# Generated with blocklist-aggregator" ]
+    map.append( "# Updated: %s" % date.today() )
     map.append( "" )
 
     for domain, source in domains.items():
-        map.append(f"{domain}\t{source}")
+        map.append(f"{domain} {source}")
     
     success = save_to_file(filename, "\n".join(map))
     if success:
@@ -259,3 +233,38 @@ def save_cdb(filename, default_value="", cfg_update=None, cfg_filename=None):
         logging.error("error to save in cdb file: %s" % e)
     else:
         logging.debug("cdb file saved with success")
+
+def save_cdb_from_map(map_filename, cdb_filename):
+    """
+    Load a domain-to-source map file and write it to a CDB file.
+    Format of map file: <domain> <source-url>
+    """
+    entries = {}
+
+    try:
+        with open(map_filename, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                try:
+                    domain, source = line.split(None, 1)
+                    entries[domain.strip()] = source.strip()
+                except ValueError:
+                    logging.warning(f"Skipping malformed line in map file: {line}")
+    except Exception as e:
+        logging.error(f"Error reading map file {map_filename}: {e}")
+        return
+    
+    if not entries:
+        logging.error("No valid entries found in the map file.")
+        return
+    
+    try:
+        with open(cdb_filename, 'wb') as f:
+            with cdblib.Writer(f) as writer:
+                for domain, source in entries.items():
+                    writer.put(domain.encode(), source.encode())
+        logging.debug(f"CDB file {cdb_filename} written successfully with {len(entries)} entries.")
+    except Exception as e:
+        logging.error(f"Error writing CDB file {cdb_filename}: {e}")

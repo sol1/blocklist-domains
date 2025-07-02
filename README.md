@@ -1,7 +1,8 @@
 ![Testing](https://github.com/dmachard/blocklist-aggregator/workflows/Testing/badge.svg) ![Build](https://github.com/dmachard/blocklist-aggregator/workflows/Build/badge.svg) ![Publish](https://github.com/dmachard/blocklist-aggregator/workflows/Publish/badge.svg) 
 
-# Blocklist aggregator
+# Sol1 Blocklist Aggregator
 
+A fork of **[python-blocklist-aggregator](https://github.com/dmachard/python-blocklist-aggregator)** by dmachard.
 This python module does the aggregation of several ads/tracking/malware lists, and merges them into a unified list with duplicates removed.
 Create your own list from several sources.
 
@@ -72,6 +73,7 @@ This module can be used to export the list in several format:
 
 * text
 * hosts
+* map (for use with TinyCDB)
 * CDB (key/value database)
 
 ```python
@@ -85,6 +87,9 @@ blocklist_aggregator.save_raw(filename="/tmp/unified_list.txt")
 
 # save to hosts file
 blocklist_aggregator.save_hosts(filename="/tmp/unified_hosts.txt", ip="0.0.0.0")
+
+# save to a text file in map format
+blocklist_aggregator.save_map(filename="tmp/unified_map.txt")
 
 # save to CDB
 blocklist_aggregator.save_cdb(filename="/tmp/unified_domains.cdb")
