@@ -1,6 +1,11 @@
 name: Build
 
 on:
+  workflow_run:
+    workflows:
+      - Testing
+    types:
+      - completed
   schedule:
     # Every day at midnight UTC
     - cron: "0 0 * * *"
