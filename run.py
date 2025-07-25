@@ -1,4 +1,5 @@
 import blocklist_aggregator
+import yaml
 
 unified = blocklist_aggregator.fetch(cfg_filename="blocklist_aggregator/blocklist.conf")
 

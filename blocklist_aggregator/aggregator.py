@@ -72,12 +72,12 @@ def fetch(cfg_update=None, cfg_filename=None):
             else:
                 if r.status_code != 200:
                     logging.error("http error: %s" % r.status_code)
-                    return []
+                    continue
                 else:
                     domains = inspect_source(s["pattern"], r.text)
                     if len(domains) == 0:
                         logging.error("no domains extracted for: %s" % u)
-                        return []
+                        continue
                     domains_bl.extend(domains)  
             
     # add more domains to the blocklist ?
